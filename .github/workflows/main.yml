@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE_REGISTRY_NAMESPACE: sonal123890  # Your Docker Hub username
+  IMAGE_REGISTRY_NAMESPACE: sonal123890
   IMAGE_REPOSITORY: alfresco-base-java
 
 jobs:
@@ -45,10 +45,11 @@ jobs:
               major: 8
             java_major: 21
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-qemu-action@4574d27a4764455b42196d70a065bc6853246a25 # v3.4.0
+
+      - uses: docker/setup-buildx-action@f7ce87c1d6bead3e36075b2ce75da1f6cc28aaca # v3.9.0
 
       - id: vars
         name: Compute Image Tag
@@ -65,15 +66,15 @@ jobs:
           echo "image_created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
           echo "timestamp=$(date -u +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
 
-      # Docker login to Docker Hub
-      - name: Login to Docker Hub
-        uses: docker/login-action@v2
+      - name: Login to docker.io
+        if: github.ref_name == 'master'
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}  # Docker Hub username (stored in GitHub Secrets)
-          password: ${{ secrets.DOCKER_PASSWORD }}  # Docker Hub password or token (stored in GitHub Secrets)
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Build Image locally
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@ca877d9245402d1537745e0e356eab47c3520991 # v6.13.0
         with:
           load: true
           build-args: |
@@ -84,24 +85,29 @@ jobs:
             REVISION=${{ github.run_number }}
             CREATED=${{ steps.vars.outputs.image_created }}
           tags: |
-            ${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.vars.outputs.image_tag }}
+            local/${{ env.IMAGE_REPOSITORY }}:ci
           target: JAVA_BASE_IMAGE
 
       - name: Test Built Image
         run: |
           echo -n "Checking for java version: "
-          docker run ${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.vars.outputs.image_tag }} java -version 2>&1 \
+          docker run local/${{ env.IMAGE_REPOSITORY }}:ci java -version 2>&1 \
           | grep -i 'version \"${{ matrix.java_major }}\.'
           echo -n "Checking shell environment: "
-          BASH_LOGIN="$(docker run ${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.vars.outputs.image_tag }} /bin/bash 2>&1 > /dev/null || true)"
+          BASH_LOGIN="$(docker run local/${{ env.IMAGE_REPOSITORY }}:ci /bin/bash 2>&1 > /dev/null || true)"
           if [ -z "$BASH_LOGIN" ]; then
             echo ok
           else echo 'bash reported an error'
             echo $BASH_LOGIN
             exit 7
+          fi
 
-      # Push images to Docker Hub
-      - name: Push images to Docker Hub
-        run: |
-          docker push ${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.vars.outputs.image_tag }}
-          docker push ${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.vars.outputs.image_tag }}-${{ steps.vars.outputs.timestamp }}
+      - name: Push images to docker.io
+        if: github.ref_name == 'master'
+        env:
+          SRC_IMAGE: quay.io/${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.vars.outputs.image_tag }}
+          DST_IMAGE: ${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.vars.outputs.image_tag }}
+        run: >-
+          docker buildx imagetools create ${{ env.SRC_IMAGE }}
+          -t ${{ env.DST_IMAGE }}
+          -t ${{ env.DST_IMAGE }}-${{ steps.vars.outputs.timestamp }}
