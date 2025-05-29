@@ -103,6 +103,8 @@ jobs:
           BASH_LOGIN="$(docker run local/${{ env.IMAGE_REPOSITORY }}:ci /bin/bash 2>&1 > /dev/null || true)"
           if [ -z "$BASH_LOGIN" ]; then
             echo ok
+            echo -n "Image architecture: "
+            docker image inspect local/alfresco-base-java:ci --format '{{.Architecture}}'
           else echo 'bash reported an error'
             echo $BASH_LOGIN
             exit 7
