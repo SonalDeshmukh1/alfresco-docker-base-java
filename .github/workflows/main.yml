@@ -92,7 +92,7 @@ jobs:
             REVISION=${{ github.run_number }}
             CREATED=${{ steps.vars.outputs.image_created }}
           tags: |
-            local/${{ env.IMAGE_REPOSITORY }}:ci
+            docker.io/${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.vars.outputs.image_tag }}
           target: JAVA_BASE_IMAGE
 
       - name: Test Built Image
