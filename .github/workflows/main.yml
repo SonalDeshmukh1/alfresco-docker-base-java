@@ -49,6 +49,8 @@ jobs:
               flavor: rockylinux
               major: 8
             arch: s390x 
+    outputs:
+      image_tag: ${{ steps.vars.outputs.image_tag }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -112,11 +114,15 @@ jobs:
             echo $BASH_LOGIN
             exit 7
           fi
+
   manifest:
     needs: build
     runs-on: ubuntu-latest
     if: github.ref_name == 'master'
     steps:
+      - name: Set IMAGE_TAG environment variable
+        run: echo "IMAGE_TAG=${{ needs.build.outputs.image_tag }}" >> $GITHUB_ENV
+
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -125,7 +131,7 @@ jobs:
       - name: Create and push manifest list
         run: |
           docker buildx imagetools create -t \
-            docker.io/${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.vars.outputs.image_tag }} \
-            docker.io/${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.vars.outputs.image_tag }}-amd64 \
-            docker.io/${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.vars.outputs.image_tag }}-arm64 \
-            docker.io/${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.vars.outputs.image_tag }}-s390x
+            docker.io/${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${IMAGE_TAG} \
+            docker.io/${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${IMAGE_TAG}-amd64 \
+            docker.io/${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${IMAGE_TAG}-arm64 \
+            docker.io/${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${IMAGE_TAG}-s390x
