@@ -19,7 +19,7 @@ env:
 
 jobs:
   build:
-    name: Java ${{ matrix.java_major }} on ${{ matrix.base_image.flavor }}:${{ matrix.base_image.major }}
+    name: Java ${{ matrix.java_major }} on ${{ matrix.base_image.flavor }}:${{ matrix.base_image.major }} (${{ matrix.arch }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: ${{ github.ref_name == 'master' && false || true }}
@@ -35,6 +35,7 @@ jobs:
           - 21
         jdist:
           - jre
+        arch: [amd64, arm64, s390x]
         exclude:
           - base_image:
               flavor: rockylinux
@@ -44,6 +45,10 @@ jobs:
               flavor: rockylinux
               major: 8
             java_major: 21
+          - base_image:
+              flavor: rockylinux
+              major: 8
+            arch: s390x 
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -66,14 +71,6 @@ jobs:
           echo "image_created=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
           echo "timestamp=$(date -u +'%Y%m%d%H%M')" >> $GITHUB_OUTPUT
 
-      - name: Login to quay.io
-        if: github.actor != 'dependabot[bot]'
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
-        with:
-          registry: quay.io
-          username: ${{ secrets.QUAY_USERNAME }}
-          password: ${{ secrets.QUAY_PASSWORD }}
-
       - name: Login to docker.io
         if: github.ref_name == 'master'
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
@@ -84,7 +81,9 @@ jobs:
       - name: Build Image locally
         uses: docker/build-push-action@ca877d9245402d1537745e0e356eab47c3520991 # v6.13.0
         with:
-          load: true
+          push: ${{ github.ref_name == 'master' }}
+          load: ${{ github.ref_name != 'master' }}
+          platform: linux/${{ matrix.arch }}
           build-args: |
             JDIST=${{ matrix.jdist }}
             DISTRIB_NAME=${{ matrix.base_image.flavor }}
@@ -105,43 +104,9 @@ jobs:
           BASH_LOGIN="$(docker run local/${{ env.IMAGE_REPOSITORY }}:ci /bin/bash 2>&1 > /dev/null || true)"
           if [ -z "$BASH_LOGIN" ]; then
             echo ok
+            echo -n "Image architecture: "
+            docker image inspect local/alfresco-base-java:ci --format '{{.Architecture}}'
           else echo 'bash reported an error'
             echo $BASH_LOGIN
             exit 7
           fi
-
-      - name: Build and Push to quay.io
-        uses: docker/build-push-action@ca877d9245402d1537745e0e356eab47c3520991 # v6.13.0
-        with:
-          push: ${{ github.actor != 'dependabot[bot]' }}
-          build-args: |
-            JDIST=${{ matrix.jdist }}
-            DISTRIB_NAME=${{ matrix.base_image.flavor }}
-            DISTRIB_MAJOR=${{ matrix.base_image.major }}
-            JAVA_MAJOR=${{ matrix.java_major }}
-            REVISION=${{ github.run_number }}
-            CREATED=${{ steps.vars.outputs.image_created }}
-          tags: |
-            quay.io/${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.vars.outputs.image_tag }}
-          platforms: linux/amd64,linux/arm64/v8
-          labels: ${{ steps.vars.outputs.image_labels }}
-          provenance: false
-          target: JAVA_BASE_IMAGE
-
-      - name: Push additional timestamped tag to quay.io
-        if: github.ref_name == 'master'
-        env:
-          SRC_IMAGE: quay.io/${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.vars.outputs.image_tag }}
-          DST_IMAGE: quay.io/${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.vars.outputs.image_tag }}-${{ steps.vars.outputs.timestamp }}
-        run: |
-          docker buildx imagetools create ${{ env.SRC_IMAGE }} -t ${{ env.DST_IMAGE }}
-
-      - name: Push images to docker.io
-        if: github.ref_name == 'master'
-        env:
-          SRC_IMAGE: quay.io/${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.vars.outputs.image_tag }}
-          DST_IMAGE: ${{ env.IMAGE_REGISTRY_NAMESPACE }}/${{ env.IMAGE_REPOSITORY }}:${{ steps.vars.outputs.image_tag }}
-        run: >-
-          docker buildx imagetools create ${{ env.SRC_IMAGE }}
-          -t ${{ env.DST_IMAGE }}
-          -t ${{ env.DST_IMAGE }}-${{ steps.vars.outputs.timestamp }}
