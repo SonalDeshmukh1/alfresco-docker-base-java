@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE_REGISTRY_NAMESPACE: alfresco
+  IMAGE_REGISTRY_NAMESPACE: sonal123890
   IMAGE_REPOSITORY: alfresco-base-java
 
 jobs:
