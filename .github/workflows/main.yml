@@ -82,7 +82,7 @@ jobs:
         uses: docker/build-push-action@ca877d9245402d1537745e0e356eab47c3520991 # v6.13.0
         with:
           load: true
-          platform: linux/${{ matrix.arch }}
+          platforms: linux/${{ matrix.arch }}
           build-args: |
             JDIST=${{ matrix.jdist }}
             DISTRIB_NAME=${{ matrix.base_image.flavor }}
